@@ -2,12 +2,16 @@
 
 **Breaking changes**
 
+* supvervisord collector reports "start_time_seconds" rather than "uptime"
+
 * [CHANGE]
 * [FEATURE] Collect NRefused property for systemd socket units (available as of systemd v239)
 * [FEATURE] Collect NRestarts property for systemd service units
 * [FEATURE] Add socket unit stats to systemd collector #968
 * [ENHANCEMENT]
 * [BUGFIX]
+
+* [BUGFIX] Fix goroutine leak in supervisord collector
 
 ## 0.16.0 / 2018-05-15
 
