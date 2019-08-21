@@ -32,7 +32,8 @@ bonding | Exposes the number of configured and active slaves of Linux bonding in
 boottime | Exposes system boot time derived from the `kern.boottime` sysctl. | Darwin, Dragonfly, FreeBSD, NetBSD, OpenBSD, Solaris
 conntrack | Shows conntrack statistics (does nothing if no `/proc/sys/net/netfilter/` present). | Linux
 cpu | Exposes CPU statistics | Darwin, Dragonfly, FreeBSD, Linux, Solaris
-diskstats | Exposes disk I/O statistics. | Darwin, Linux
+cpufreq | Exposes CPU frequency statistics | Linux, Solaris
+diskstats | Exposes disk I/O statistics. | Darwin, Linux, OpenBSD
 edac | Exposes error detection and correction statistics. | Linux
 entropy | Exposes available entropy. | Linux
 exec | Exposes execution statistics. | Dragonfly, FreeBSD
@@ -49,17 +50,36 @@ netdev | Exposes network interface statistics such as bytes transferred. | Darwi
 netstat | Exposes network statistics from `/proc/net/netstat`. This is the same information as `netstat -s`. | Linux
 nfs | Exposes NFS client statistics from `/proc/net/rpc/nfs`. This is the same information as `nfsstat -c`. | Linux
 nfsd | Exposes NFS kernel server statistics from `/proc/net/rpc/nfsd`. This is the same information as `nfsstat -s`. | Linux
+pressure | Exposes pressure stall statistics from `/proc/pressure/`. | Linux (kernel 4.20+ and/or [CONFIG\_PSI](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/accounting/psi.txt))
+schedstat | Exposes task scheduler statistics from `/proc/schedstat`. | Linux
 sockstat | Exposes various statistics from `/proc/net/sockstat`. | Linux
 stat | Exposes various statistics from `/proc/stat`. This includes boot time, forks and interrupts. | Linux
 textfile | Exposes statistics read from local disk. The `--collector.textfile.directory` flag must be set. | _any_
 time | Exposes the current system time. | _any_
 timex | Exposes selected adjtimex(2) system call stats. | Linux
-uname | Exposes system information as provided by the uname system call. | Linux
+uname | Exposes system information as provided by the uname system call. | Darwin, FreeBSD, Linux, OpenBSD
 vmstat | Exposes statistics from `/proc/vmstat`. | Linux
 xfs | Exposes XFS runtime statistics. | Linux (kernel 4.4+)
 zfs | Exposes [ZFS](http://open-zfs.org/) performance statistics. | [Linux](http://zfsonlinux.org/), Solaris
 
 ### Disabled by default
+
+The perf collector may not work by default on all Linux systems due to kernel
+configuration and security settings. To allow access, set the following sysctl
+parameter:
+
+```
+sysctl -w kernel.perf_event_paranoid=X
+```
+
+- 2 allow only user-space measurements (default since Linux 4.6).
+- 1 allow both kernel and user measurements (default before Linux 4.6).
+- 0 allow access to CPU-specific data but not raw tracepoint samples.
+- -1 no restrictions.
+
+Depending on the configured value different metrics will be available, for most
+cases `0` will provide the most complete set. For more information see [`man 2
+perf_event_open`](http://man7.org/linux/man-pages/man2/perf_event_open.2.html).
 
 Name     | Description | OS
 ---------|-------------|----
@@ -79,6 +99,7 @@ supervisord | Exposes service status from [supervisord](http://supervisord.org/)
 systemd | Exposes service and system status from [systemd](http://www.freedesktop.org/wiki/Software/systemd/). | Linux
 tcpstat | Exposes TCP connection status information from `/proc/net/tcp` and `/proc/net/tcp6`. (Warning: the current version has potential performance issues in high load situations.) | Linux
 wifi | Exposes WiFi device and station statistics. | Linux
+perf | Exposes perf based metrics (Warning: Metrics are dependent on kernel configuration and settings). | Linux
 
 ### Textfile Collector
 
@@ -91,7 +112,7 @@ that are tied to a machine.
 To use it, set the `--collector.textfile.directory` flag on the Node exporter. The
 collector will parse all files in that directory matching the glob `*.prom`
 using the [text
-format](http://prometheus.io/docs/instrumenting/exposition_formats/).
+format](http://prometheus.io/docs/instrumenting/exposition_formats/). **Note:** Timestamps are not supported.
 
 To atomically push completion time for a cron job:
 ```
@@ -158,7 +179,7 @@ docker run -d \
   --pid="host" \
   -v "/:/host:ro,rslave" \
   quay.io/prometheus/node-exporter \
-  --path.rootfs /host
+  --path.rootfs=/host
 ```
 
 On some systems, the `timex` collector requires an additional Docker flag,

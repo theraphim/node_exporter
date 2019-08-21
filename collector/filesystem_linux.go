@@ -22,15 +22,15 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/common/log"
+	"golang.org/x/sys/unix"
 )
 
 const (
 	defIgnoredMountPoints = "^/(dev|proc|sys|var/lib/docker/.+)($|/)"
-	defIgnoredFSTypes     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+	defIgnoredFSTypes     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
 	mountTimeout          = 30 * time.Second
 )
 
@@ -70,9 +70,8 @@ func (c *filesystemCollector) GetStats() ([]filesystemStats, error) {
 		success := make(chan struct{})
 		go stuckMountWatcher(labels.mountPoint, success)
 
-		buf := new(syscall.Statfs_t)
-		err = syscall.Statfs(rootfsFilePath(labels.mountPoint), buf)
-
+		buf := new(unix.Statfs_t)
+		err = unix.Statfs(rootfsFilePath(labels.mountPoint), buf)
 		stuckMountsMtx.Lock()
 		close(success)
 		// If the mount has been marked as stuck, unmark it and log it's recovery.
@@ -166,7 +165,7 @@ func parseFilesystemLabels(r io.Reader) ([]filesystemLabels, error) {
 
 		filesystems = append(filesystems, filesystemLabels{
 			device:     parts[0],
-			mountPoint: parts[1],
+			mountPoint: rootfsStripPrefix(parts[1]),
 			fsType:     parts[2],
 			options:    parts[3],
 		})

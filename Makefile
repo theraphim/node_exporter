@@ -11,6 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Ensure that 'all' is the default target otherwise it will be the first target from Makefile.common.
+all::
+
+# Needs to be defined before including Makefile.common to auto-generate targets
+DOCKER_ARCHS ?= amd64 armv7 arm64 ppc64le
+
 include Makefile.common
 
 PROMTOOL_VERSION ?= 2.5.0
@@ -19,7 +25,6 @@ PROMTOOL         ?= $(FIRST_GOPATH)/bin/promtool
 
 DOCKER_IMAGE_NAME       ?= node-exporter
 MACH                    ?= $(shell uname -m)
-DOCKERFILE              ?= Dockerfile
 
 STATICCHECK_IGNORE =
 
@@ -34,7 +39,7 @@ ifeq ($(GOOS), linux)
 	PROMU_CONF ?= .promu.yml
 else
 	ifndef GOOS
-		ifeq ($(GOHOSTOS), Linux)
+		ifeq ($(GOHOSTOS), linux)
 			PROMU_CONF ?= .promu.yml
 		else
 			PROMU_CONF ?= .promu-cgo.yml
@@ -70,7 +75,7 @@ $(eval $(call goarch_pair,amd64,386))
 $(eval $(call goarch_pair,mips64,mips))
 $(eval $(call goarch_pair,mips64el,mipsel))
 
-all: style vet staticcheck checkmetrics checkrules build test $(cross-test) $(test-e2e)
+all:: vet checkmetrics checkrules common-all $(cross-test) $(test-e2e)
 
 .PHONY: test
 test: collector/fixtures/sys/.unpacked
@@ -111,18 +116,10 @@ checkrules: $(PROMTOOL)
 	@echo ">> checking rules for correctness"
 	find . -name "*rules*.yml" | xargs -I {} $(PROMTOOL) check rules {}
 
-.PHONY: docker
-docker:
-ifeq ($(MACH), ppc64le)
-	$(eval DOCKERFILE=Dockerfile.ppc64le)
-endif
-	@echo ">> building docker image from $(DOCKERFILE)"
-	@docker build --file $(DOCKERFILE) -t "$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" .
-
 .PHONY: test-docker
 test-docker:
 	@echo ">> testing docker image"
-	./test_image.sh "$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)" 9100
+	./test_image.sh "$(DOCKER_REPO)/$(DOCKER_IMAGE_NAME)-linux-amd64:$(DOCKER_IMAGE_TAG)" 9100
 
 .PHONY: promtool
 promtool: $(PROMTOOL)
