@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -33,7 +34,7 @@ func init() {
 	registerCollector("hddtemp", defaultDisabled, NewHddtempCollector)
 }
 
-func NewHddtempCollector() (Collector, error) {
+func NewHddtempCollector(logger log.Logger) (Collector, error) {
 	return &hddtempCollector{
 		temp: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
