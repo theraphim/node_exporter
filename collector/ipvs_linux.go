@@ -20,8 +20,9 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/procfs"
 )
 
@@ -30,6 +31,7 @@ type ipvsCollector struct {
 	fs                                                                          procfs.FS
 	backendConnectionsActive, backendConnectionsInact, backendWeight            typedDesc
 	connections, incomingPackets, outgoingPackets, incomingBytes, outgoingBytes typedDesc
+	logger                                                                      log.Logger
 }
 
 func init() {
@@ -38,11 +40,11 @@ func init() {
 
 // NewIPVSCollector sets up a new collector for IPVS metrics. It accepts the
 // "procfs" config parameter to override the default proc location (/proc).
-func NewIPVSCollector() (Collector, error) {
-	return newIPVSCollector()
+func NewIPVSCollector(logger log.Logger) (Collector, error) {
+	return newIPVSCollector(logger)
 }
 
-func newIPVSCollector() (*ipvsCollector, error) {
+func newIPVSCollector(logger log.Logger) (*ipvsCollector, error) {
 	var (
 		ipvsBackendLabelNames = []string{
 			"local_address",
@@ -50,15 +52,17 @@ func newIPVSCollector() (*ipvsCollector, error) {
 			"remote_address",
 			"remote_port",
 			"proto",
+			"local_mark",
 		}
 		c         ipvsCollector
 		err       error
 		subsystem = "ipvs"
 	)
 
+	c.logger = logger
 	c.fs, err = procfs.NewFS(*procPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open procfs: %v", err)
+		return nil, fmt.Errorf("failed to open procfs: %w", err)
 	}
 
 	c.connections = typedDesc{prometheus.NewDesc(
@@ -110,8 +114,8 @@ func (c *ipvsCollector) Update(ch chan<- prometheus.Metric) error {
 	if err != nil {
 		// Cannot access ipvs metrics, report no error.
 		if os.IsNotExist(err) {
-			log.Debug("ipvs collector metrics are not available for this system")
-			return nil
+			level.Debug(c.logger).Log("msg", "ipvs collector metrics are not available for this system")
+			return ErrNoData
 		}
 		return fmt.Errorf("could not get IPVS stats: %s", err)
 	}
@@ -127,12 +131,17 @@ func (c *ipvsCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	for _, backend := range backendStats {
+		localAddress := ""
+		if backend.LocalAddress.String() != "<nil>" {
+			localAddress = backend.LocalAddress.String()
+		}
 		labelValues := []string{
-			backend.LocalAddress.String(),
+			localAddress,
 			strconv.FormatUint(uint64(backend.LocalPort), 10),
 			backend.RemoteAddress.String(),
 			strconv.FormatUint(uint64(backend.RemotePort), 10),
 			backend.Proto,
+			backend.LocalMark,
 		}
 		ch <- c.backendConnectionsActive.mustNewConstMetric(float64(backend.ActiveConn), labelValues...)
 		ch <- c.backendConnectionsInact.mustNewConstMetric(float64(backend.InactConn), labelValues...)
